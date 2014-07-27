@@ -1,0 +1,75 @@
+Predict Exercise Action
+========================================================
+
+Executive Summary  
+-----------------------  
+
+This report attempts to predict the manner in which people perform weight lifting exercise. Data for this analysis is obtained from <a href="http://groupware.les.inf.puc-rio.br/har">http://groupware.les.inf.puc-rio.br/har</a>. Six young health participants were asked to perform one set of 10 repetitions of the Unilateral Dumbbell Biceps Curl in five different fashions: exactly according to the specification (Class A), throwing the elbows to the front (Class B), lifting the dumbbell only halfway (Class C), lowering the dumbbell only halfway (Class D) and throwing the hips to the front (Class E).
+
+Loading & Cleaning Data
+--------------------------
+```{r results="hide"}
+pml_training <- read.csv("pml-training.csv")
+pml_testing <- read.csv("pml-testing.csv")
+```
+Creating training & cross-validation dataset:
+```{r}
+library(caret)
+
+set.seed(123)
+inTrain <- createDataPartition(y=pml_training$classe,
+                              p=0.75, list=FALSE)
+training <- pml_training[inTrain,]
+testing <- pml_training[-inTrain,]
+```
+Remove zero variance variables
+```{r}
+nzv <- nearZeroVar(training)
+training <- training[-nzv]
+testing <- testing[-nzv]
+testing_final <- pml_testing[-nzv]
+```
+Remove variables like username and timestamp which are not dependent variable
+Impute values
+```{r}
+pre_model <- preProcess(training[,-c(1,2,3,4,5,6,101)],method = c("knnImpute"))
+prediction_train <- cbind(training$classe, predict(pre_model,training[,-c(1,2,3,4,5,6,101)]))
+prediction_test <- cbind(testing$classe, predict(pre_model, testing[,-c(1,2,3,4,5,6,101)]))
+prediction_final_test <- predict(pre_model, testing_final[,-c(1,2,3,4,5,6,101)])
+names(prediction_train)[1] <- "classe"
+names(prediction_test)[1] <- "classe"
+```
+Random Forest Model
+--------------------------
+Prediction model using Random Forest
+```{r}
+library(randomForest)
+forest_model <- randomForest(classe ~ ., prediction_train, mtry=32)
+```
+
+Verifying Accuracy
+--------------------------
+### Training set accuracy
+```{r}
+training_set_prediction <- predict(forest_model, prediction_train)
+print(confusionMatrix(training_set_prediction, prediction_train$classe))
+```
+In sample accuracy is 100%
+### Out of Sample accuracy
+```{r}
+testing_set_prediction <- predict(forest_model, prediction_test)
+print(confusionMatrix(testing_set_prediction, prediction_test$classe))
+```
+Out of sample accuracy is 99%
+Prediction with test data (20 cases)
+-------------------------------------
+```{r}
+predict(forest_model, prediction_final_test)
+```
+All the tests were predicted correctly
+
+Appendix:Variable importance plot
+-------------------------------------
+```{r fig.width=7, fig.height=6}
+varImpPlot(forest_model)
+```
